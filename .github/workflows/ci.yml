@@ -26,4 +26,16 @@ jobs:
       - name: shellcheck
         run: |
           shellcheck -x -S warning \
-            install.sh uninstall.sh src/common.sh src/daemon.sh src/arrange.sh src/doctor.sh
+            install.sh uninstall.sh src/common.sh src/daemon.sh src/arrange.sh src/doctor.sh tests/run.sh
+
+  test:
+    name: 解析单元测试 (awk + jq)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Run parser unit tests
+        run: bash tests/run.sh

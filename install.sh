@@ -92,7 +92,7 @@ else
     hdiutil detach "$VOL" -quiet || true
     # 注意：不抹 BetterDisplay 的 quarantine —— 它已签名/公证，交给 Gatekeeper 验证。
     rm -rf "$TMP"
-    say "BetterDisplay 安装成功（首次打开如有 Gatekeeper 提示，请在“系统设置 → 隐私与安全性”放行）"
+    say "BetterDisplay 安装成功（首次打开如有 Gatekeeper 提示，请在'系统设置 → 隐私与安全性'放行）"
   fi
 fi
 say "首次启动 BetterDisplay（请按屏幕提示授予权限，并在其设置中开启 Launch at login）..."
@@ -130,7 +130,7 @@ bash "$HSROOT/src/doctor.sh" || true
 echo
 echo "==================================================="
 say "安装完成！还需你手动确认两件事："
-echo "   1) 打开 BetterDisplay -> 设置 -> 开启 ‘Launch at login’"
+echo "   1) 打开 BetterDisplay -> 设置 -> 开启 'Launch at login'"
 echo "      （否则重启后无法自动设主屏）"
 echo "   2) 若 doctor 未发现 iPad：确认 iPad 与 Mac 登录同一 Apple ID、"
 echo "      已解锁、蓝牙/WiFi 开启，或用 USB-C 线连接"

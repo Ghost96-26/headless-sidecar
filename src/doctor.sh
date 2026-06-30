@@ -37,7 +37,7 @@ CHIP="$(sysctl -n machdep.cpu.brand_string 2>/dev/null)"
 if [ "$ARCH" = "arm64" ]; then
   ok "Apple Silicon ($CHIP) — 支持 BetterDisplay 自动断开内置屏"
 else
-  warn "Intel 芯片 ($CHIP) — 可用，但‘自动断开内置屏’行为不同，建议用脚本断开或外接诱骗"
+  warn "Intel 芯片 ($CHIP) — 可用，但'自动断开内置屏'行为不同，建议用脚本断开或外接诱骗"
 fi
 info "机型: ${MODEL:-未知}"
 
@@ -63,6 +63,9 @@ if [ -n "$SL" ]; then
     DEVS="$("$SL" devices 2>/dev/null | sed '/^$/d')"
     if [ -n "$DEVS" ]; then
       ok "可达 Sidecar 设备:"; echo "$DEVS" | while read -r d; do info "→ $d"; done
+      if [ -z "$IPAD_NAME" ] && [ "$(ipad_device_count)" -gt 1 ] 2>/dev/null; then
+        warn "发现多台设备但未设 IPAD_NAME，守护进程会盲选第一台，可能连错。请在 config.sh 设置 IPAD_NAME"
+      fi
     else
       warn "未发现可达 iPad。请确认：iPad 已解锁、与 Mac 同一 Apple ID、蓝牙/WiFi 开启、或已用 USB-C 连接"
     fi
@@ -93,7 +96,7 @@ if [ -n "$BD" ]; then
       info "当前未检测到已连接的 Sidecar 屏（连上后才会出现）"
     fi
   else
-    warn "BetterDisplay 已安装但后台未运行。请打开一次 BetterDisplay 并授予权限，建议开启 ‘Launch at login’"
+    warn "BetterDisplay 已安装但后台未运行。请打开一次 BetterDisplay 并授予权限，建议开启 'Launch at login'"
   fi
 else
   bad "未安装 BetterDisplay，请运行 ./install.sh"

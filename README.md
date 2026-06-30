@@ -1,3 +1,7 @@
+<!-- LANG-NAV -->
+**🌍 语言 / Language:** **中文** · [English](README.en.md) · [Deutsch](README.de.md)
+<sub>（中文为权威版本，英 / 德为镜像，翻译可能滞后）</sub>
+
 # Headless Sidecar 🏍️ — 让屏幕坏掉的 Mac 自动用 iPad 当主显示器
 
 > **一句话**：MacBook 内置屏坏了？插上 iPad，登录后它会**自动连上 Sidecar 并把 iPad 设为唯一主屏**，无需每次手动点控制中心。专为「无头骑士」（headless / 坏屏）Mac 打造。

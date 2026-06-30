@@ -1,3 +1,7 @@
+<!-- LANG-NAV -->
+**🌍 语言 / Language:** [中文](README.md) · [English](README.en.md) · **Deutsch**
+<sub>(Chinesische `README.md` ist maßgeblich; Übersetzungen können veralten.)</sub>
+
 # Headless Sidecar 🏍️ — Ein iPad automatisch als Hauptbildschirm für einen Mac mit defektem Display nutzen
 
 > **In einem Satz**: Defektes MacBook-Display? iPad anstecken, und direkt nach der Anmeldung **verbindet es sich automatisch per Sidecar und macht das iPad zum alleinigen Hauptbildschirm** — kein manuelles Klicken durchs Kontrollzentrum mehr. Gebaut für Macs ohne Kopf / mit defektem internem Display.

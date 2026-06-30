@@ -23,6 +23,12 @@ connect_sidecar() {
 }
 
 log "[daemon] 启动，目标 iPad=\"$(detect_ipad_name)\" 间隔=${POLL_INTERVAL}s 退避上限=${BACKOFF_MAX}s"
+# 多设备保护：未显式指定 IPAD_NAME 且发现多台可达设备时，会盲选第一台，
+# 可能连错。提醒用户在 config.sh 设置 IPAD_NAME。
+if [ -z "$IPAD_NAME" ] && [ "$(ipad_device_count)" -gt 1 ] 2>/dev/null; then
+  log "[daemon] ⚠ 发现多台可达 Sidecar 设备，未设 IPAD_NAME，将盲选第一台。建议在 config.sh 显式设置 IPAD_NAME"
+  notify "发现多台设备，建议在 config.sh 指定 IPAD_NAME"
+fi
 trap 'log "[daemon] 退出"' EXIT
 
 fails=0          # 连续连接失败计数

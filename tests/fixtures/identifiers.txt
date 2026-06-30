@@ -1,0 +1,19 @@
+{
+  "UUID" : "11111111-AAAA-BBBB-CCCC-000000000001",
+  "deviceType" : "Display",
+  "name" : "HDMI",
+  "productName" : "HDMI",
+  "registryLocation" : "IOService:/AppleARMPE/arm-io@10F00000/AppleT810xIO/dispext0@70000000/AppleCLCD2"
+},{
+  "UUID" : "22222222-AAAA-BBBB-CCCC-000000000002",
+  "deviceType" : "Display",
+  "name" : "Sidecar Display",
+  "productName" : "Sidecar Display",
+  "registryLocation" : ""
+},{
+  "UUID" : "33333333-AAAA-BBBB-CCCC-000000000003",
+  "deviceType" : "Display",
+  "name" : "内建显示屏",
+  "productName" : "Color LCD",
+  "registryLocation" : "IOService:/AppleARMPE/arm-io@10F00000/AppleT810xIO/disp0@30000000/AppleCLCD2"
+}

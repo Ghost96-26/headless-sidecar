@@ -1,3 +1,7 @@
+<!-- LANG-NAV -->
+**🌍 语言 / Language:** [中文](README.md) · **English** · [Deutsch](README.de.md)
+<sub>(Chinese `README.md` is authoritative; translations may lag.)</sub>
+
 # Headless Sidecar 🏍️ — Auto-use an iPad as the primary display for a broken-screen Mac
 
 > **In one line**: Broken MacBook screen? Plug in an iPad and, right after you log in, it **auto-connects via Sidecar and makes the iPad the sole primary display** — no more manually clicking through Control Center every time. Built for headless / broken-internal-display Macs.

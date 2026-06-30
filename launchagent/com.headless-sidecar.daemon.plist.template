@@ -15,6 +15,9 @@
     <true/>
     <key>ProcessType</key>
     <string>Background</string>
+    <!-- 守护若异常秒退，至少间隔 10s 再由 launchd 拉起，避免紧贴崩溃循环 -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
     <key>StandardErrorPath</key>
     <string>__LOG_DIR__/launchd.err.log</string>
     <key>StandardOutPath</key>
