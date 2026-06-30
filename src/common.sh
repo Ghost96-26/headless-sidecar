@@ -1,19 +1,15 @@
 #!/bin/bash
-# common.sh — 共享函数与自动检测逻辑（被其他脚本 source）
-# 不含任何机器特定的硬编码；所有机器相关值均运行时检测或由 config.sh 覆盖。
-#
-# 关键设计：对 BetterDisplay 的一切操作都以 **UUID** 为准，而不是显示器名字。
-# 原因：真机上 Sidecar 屏在 BetterDisplay 里的名字是 "Sidecar Display"，
-# 而 SidecarLauncher 的设备名是 "iPad"，二者不一致。按名字匹配会失败。
+# 共享函数与自动检测逻辑，被其他脚本 source。无机器特定硬编码，
+# 机器相关值一律运行时检测或由 config.sh 覆盖。
+# 对 BetterDisplay 的操作统一按 UUID 进行：Sidecar 屏在 BetterDisplay 里
+# 名为 "Sidecar Display"，而 SidecarLauncher 的设备名是 "iPad"，按名字会匹配不上。
 
-# 项目根目录（src 的上一级）
 HSROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# 载入用户配置（可选）。config.sh 由用户从 config.example.sh 复制而来。
 # shellcheck source=/dev/null
 [ -f "$HSROOT/config.sh" ] && source "$HSROOT/config.sh"
 
-# ---- 默认值（config.sh 可覆盖）----
+# 默认值，可被 config.sh 覆盖
 : "${IPAD_NAME:=}"                 # 留空则自动探测
 : "${POLL_INTERVAL:=5}"            # 守护轮询间隔（秒）
 : "${DISABLE_BUILTIN:=auto}"       # auto|on|off：是否脚本化断开内置屏
@@ -29,7 +25,7 @@ HSROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 mkdir -p "$HSROOT/logs" 2>/dev/null
 
-# ---- SidecarLauncher 二进制定位 ----
+# 定位 SidecarLauncher 二进制
 sidecar_bin() {
   if [ -n "${SIDECAR_BIN:-}" ] && [ -x "$SIDECAR_BIN" ]; then echo "$SIDECAR_BIN"; return; fi
   local p
@@ -38,7 +34,7 @@ sidecar_bin() {
   done
 }
 
-# ---- BetterDisplay CLI 定位（其 app 主程序即 CLI 入口）----
+# 定位 BetterDisplay CLI（其 app 主程序即 CLI 入口）
 bd_cli() {
   if [ -n "${BDCLI:-}" ] && [ -x "$BDCLI" ]; then echo "$BDCLI"; return; fi
   local p
@@ -50,7 +46,7 @@ bd_cli() {
   done
 }
 
-# ---- 日志（带按大小轮转）----
+# 日志，超过 MAX_LOG_BYTES 时轮转
 rotate_log() {
   [ -f "$LOG_FILE" ] || return 0
   local sz
@@ -61,34 +57,30 @@ rotate_log() {
 }
 log() { rotate_log; echo "$(date '+%F %T') $*" >> "$LOG_FILE"; }
 
-# ---- macOS 桌面通知（坏屏用户看不到日志，连上后给个反馈）----
+# macOS 桌面通知（坏屏时看不到日志，靠它反馈）
 notify() {
   [ "$NOTIFY" = "on" ] || return 0
   osascript -e "display notification \"$1\" with title \"Headless Sidecar\"" >/dev/null 2>&1 || true
 }
 
-# ---- 是否有 jq（解析 BetterDisplay 输出更稳）----
 have_jq() { command -v jq >/dev/null 2>&1; }
 
-# ---- 取 BetterDisplay identifiers 原始输出 ----
 _bd_identifiers() {
   local bd; bd="$(bd_cli)"; [ -z "$bd" ] && return 1
   "$bd" get --identifiers 2>/dev/null
 }
 
-# BetterDisplay 输出形如 {..},{..}，包一层 [] 即合法 JSON 数组。
+# BetterDisplay 输出形如 {..},{..}，包一层 [] 即合法 JSON 数组
 _bd_json() { _bd_identifiers | { printf '['; cat; printf ']'; }; }
 
-# ---- 可达 Sidecar 设备数量（用于多设备保护）----
+# 可达 Sidecar 设备数量，用于多设备保护
 ipad_device_count() {
   local sl; sl="$(sidecar_bin)"; [ -z "$sl" ] && { echo 0; return; }
   "$sl" devices 2>/dev/null | sed '/^$/d' | grep -c .
 }
 
-# ---- 自动探测 iPad 名称（用于 SidecarLauncher connect）----
-# 优先 config 的 IPAD_NAME；否则用 SidecarLauncher 列出的第一个可达设备。
-# 注意：发现多台设备时仍返回第一台，但调用方应先用 ipad_device_count 提示用户
-# 在 config.sh 显式设置 IPAD_NAME，避免连错设备。
+# 探测 iPad 名称（用于 connect）。优先 IPAD_NAME，否则取第一台可达设备。
+# 多台设备时仍返回第一台，调用方应先用 ipad_device_count 提示设置 IPAD_NAME。
 detect_ipad_name() {
   if [ -n "$IPAD_NAME" ]; then echo "$IPAD_NAME"; return; fi
   local sl; sl="$(sidecar_bin)"
@@ -96,19 +88,15 @@ detect_ipad_name() {
   "$sl" devices 2>/dev/null | sed '/^$/d' | head -1
 }
 
-# ---- iPad 是否经 USB 物理连接 ----
-# 精确匹配 USB Product Name 含 iPad，避免误命中集线器/读卡器等描述串。
+# iPad 是否经 USB 连接。精确匹配 USB Product Name，避免命中集线器等描述。
 ipad_plugged() {
   ioreg -p IOUSB -l 2>/dev/null | grep -i '"USB Product Name"' | grep -qi 'ipad'
 }
 
-# ============================================================
-# 纯解析函数：从 stdin 读取 `BetterDisplay get --identifiers` 文本，
-# 输出目标 UUID。与数据源解耦，便于在 CI 用 fixture 做单元测试
-# （见 tests/）。detect_* 只是 `_bd_identifiers | parse_*` 的封装。
-# ============================================================
+# parse_* 从 stdin 读 `BetterDisplay get --identifiers` 文本并输出 UUID，
+# 与数据源解耦以便用 fixture 单测（见 tests/）。detect_* 是它们的封装。
 
-# 解析 Sidecar 屏 UUID：deviceType=Display 且 name/productName 含 "Sidecar"。
+# Sidecar 屏 UUID：deviceType=Display 且 name/productName 含 Sidecar
 parse_sidecar_uuid() {
   if have_jq; then
     { printf '['; cat; printf ']'; } | jq -r '
@@ -129,8 +117,8 @@ parse_sidecar_uuid() {
     }'
 }
 
-# 解析内置屏 UUID：registryLocation 含内置面板路径(disp0@ 且非 dispext)，
-# 或 productName=Color LCD，或 name 含 Built-in/内建。
+# 内置屏 UUID：registryLocation 含 disp0@ 且非 dispext，或 productName=Color LCD，
+# 或 name 含 Built-in/内建
 parse_builtin_uuid() {
   if have_jq; then
     { printf '['; cat; printf ']'; } | jq -r '
@@ -158,21 +146,19 @@ parse_builtin_uuid() {
     }'
 }
 
-# ---- 探测 Sidecar 显示器 UUID（已连上才有）----
 detect_sidecar_uuid() { _bd_identifiers | parse_sidecar_uuid; }
 
-# ---- 自动探测内置屏 UUID（跨机型尽量通用）----
 detect_builtin_uuid() {
   [ -n "$BUILTIN_UUID" ] && { echo "$BUILTIN_UUID"; return; }
   _bd_identifiers | parse_builtin_uuid
 }
 
-# ---- Sidecar 是否已激活（按 UUID 判定，而非名字）----
+# Sidecar 是否已连接（按 UUID 判定）
 sidecar_active() {
   [ -n "$(detect_sidecar_uuid)" ]
 }
 
-# ---- Sidecar 屏是否已是主屏（按 UUID）----
+# Sidecar 屏是否已是主屏
 sidecar_is_main() {
   local bd uuid; bd="$(bd_cli)"; [ -z "$bd" ] && return 1
   uuid="$(detect_sidecar_uuid)"; [ -z "$uuid" ] && return 1

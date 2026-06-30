@@ -36,5 +36,5 @@ else
 fi
 
 echo
-[ "$fail" -eq 0 ] && echo "全部通过 ✅" || echo "存在失败 ❌"
+[ "$fail" -eq 0 ] && echo "全部通过" || echo "存在失败"
 exit "$fail"

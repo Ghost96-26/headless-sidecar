@@ -1,5 +1,5 @@
 #!/bin/bash
-# uninstall.sh — 卸载开机自启与本地文件（不卸载 BetterDisplay.app）
+# 卸载开机自启与本地文件，不卸载 BetterDisplay.app
 set -uo pipefail
 HSROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
