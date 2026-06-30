@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  lint:
+    name: shellcheck + bash -n
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: bash -n (syntax check)
+        run: |
+          set -e
+          for f in install.sh uninstall.sh config.example.sh src/*.sh; do
+            echo "== bash -n $f"
+            bash -n "$f"
+          done
+
+      - name: shellcheck
+        run: |
+          shellcheck -x -S warning \
+            install.sh uninstall.sh src/common.sh src/daemon.sh src/arrange.sh src/doctor.sh

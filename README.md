@@ -77,7 +77,12 @@
 设计要点：
 - **轻量、省电**：用 `ioreg` 而非 `system_profiler` 检测，5 秒间隔，对续航几乎无感；连上后不再重复动作。
 - **不依赖 UI 自动化**：用 SidecarLauncher 二进制而非 AppleScript 点控制中心，避免 launchd 下「辅助功能权限」不稳的坑。
-- **跨机型自适应**：iPad 名称、内置屏 UUID 全部**运行时自动探测**，无硬编码。
+- **跨机型自适应**：iPad 名称、Sidecar 屏 / 内置屏 UUID 全部**运行时自动探测**，无硬编码。
+- **一切按 UUID 操作**：Sidecar 屏在 BetterDisplay 里实际叫 `Sidecar Display`（不叫 `iPad`），故设主屏 / 判断状态全部以 UUID 为准，避免按名字匹配在真机上失效。
+- **失败退避 + 冷却**：连接失败按指数退避（4→8→…→封顶 `BACKOFF_MAX`），连续失败 `FAIL_LIMIT` 次进入冷却并只告警一次，不刷日志。
+- **桌面通知**：连上设主屏成功 / 反复失败时弹 macOS 通知（坏屏看不到日志时也能知道结果）。
+- **日志轮转**：`run.log` 超过 `MAX_LOG_BYTES` 自动转存，长期常驻不胀大。
+- **解析更稳**：优先用 `jq` 解析 BetterDisplay 输出，无 `jq` 时回退 `awk`。
 
 ---
 
@@ -146,6 +151,11 @@ cp config.example.sh config.sh
 | `DISABLE_BUILTIN` | `auto` | `auto`/`off`，是否脚本化断开内置屏 |
 | `BUILTIN_UUID` | 空（自动探测） | 内置屏 UUID，自动识别不准时手填 |
 | `SIDECAR_WIRED` | `on` | 是否强制有线 Sidecar（更稳） |
+| `NOTIFY` | `on` | 连上 / 失败时是否弹 macOS 通知 |
+| `MAX_LOG_BYTES` | `1048576` | 日志轮转阈值（字节） |
+| `BACKOFF_MAX` | `60` | 连接失败退避上限（秒） |
+| `FAIL_LIMIT` | `5` | 连续失败到此值进入冷却并告警 |
+| `SIDECAR_SHA256` / `BD_SHA256` | 空 | 可选，安装时校验依赖二进制完整性 |
 
 > `config.sh` 含你的个人信息，已被 `.gitignore` 忽略，不会上传。
 
@@ -169,17 +179,18 @@ headless-sidecar/
 
 **关键自动探测逻辑（`src/common.sh`）**
 - `detect_ipad_name`：优先读 `config.sh`，否则取 `SidecarLauncher devices` 的第一台。
-- `detect_builtin_uuid`：解析 `BetterDisplay get --identifiers`，按内置面板特征命中——
-  registryLocation 含内置面板路径（`disp0@` 且非 `dispext`）或 productName 为 `Color LCD` 或名称含 `Built-in/内建`。
-- `ipad_plugged`：`ioreg -p IOUSB` grep iPad（轻量）。
-- `sidecar_active` / `ipad_is_main`：通过 BetterDisplay CLI 判断状态。
+- `detect_sidecar_uuid`：从 `BetterDisplay get --identifiers` 找 name/productName 含 `Sidecar` 的显示器 UUID。
+- `detect_builtin_uuid`：按内置面板特征命中——registryLocation 含 `disp0@` 且非 `dispext`，或 productName 为 `Color LCD`，或名称含 `Built-in/内建`。
+- 上述解析优先 `jq`（包一层 `[]` 成合法 JSON 数组），无 `jq` 时回退 `awk`。
+- `ipad_plugged`：`ioreg -p IOUSB` 精确匹配 `USB Product Name` 含 iPad（避免误命中集线器等描述）。
+- `sidecar_active` / `sidecar_is_main`：均按 Sidecar 屏 UUID 判断，不按名字。
 
 **开机自启**：`install.sh` 把模板里的 `__DAEMON_PATH__` / `__LOG_DIR__` 替换成真实路径，写入
-`~/Library/LaunchAgents/com.headless-sidecar.daemon.plist` 并 `launchctl load`。`RunAtLoad + KeepAlive` 保证登录后常驻。
+`~/Library/LaunchAgents/com.headless-sidecar.daemon.plist`，优先用新版 `launchctl bootstrap gui/$UID`（失败回退旧版 `launchctl load`）。`RunAtLoad + KeepAlive` 保证登录后常驻。
 
 **为什么不用 AppleScript 点控制中心？** 在 launchd 环境里给 osascript 授「辅助功能」权限非常不稳定（macOS 会以 `-1719 不允许辅助访问` 拒绝）。改用 SidecarLauncher 二进制，发起连接不依赖任何 UI 权限。
 
-**贡献**：欢迎 PR。改动脚本后请确保 `bash -n` 通过，并在真机跑一遍 `./src/doctor.sh`。不同机型 / macOS 版本的兼容反馈尤其欢迎（请附 `sw_vers`、`uname -m`、`hw.model`）。
+**贡献**：欢迎 PR。改动脚本后请确保 `bash -n` 与 `shellcheck` 通过（CI 会跑 `.github/workflows/ci.yml`），并在真机跑一遍 `./src/doctor.sh`。不同机型 / macOS 版本的兼容反馈尤其欢迎（请附 `sw_vers`、`uname -m`、`hw.model`）。
 
 ---
 

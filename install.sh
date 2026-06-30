@@ -9,6 +9,17 @@ say(){ printf "${GREEN}==>${NC} %s\n" "$1"; }
 warn(){ printf "${YEL}[!]${NC} %s\n" "$1"; }
 die(){ printf "${RED}[x]${NC} %s\n" "$1"; exit 1; }
 
+# 计算并（可选）校验 sha256：verify_sha <file> <expected|空>
+verify_sha(){
+  local f="$1" want="$2" got
+  got="$(shasum -a 256 "$f" 2>/dev/null | awk '{print $1}')"
+  say "sha256($(basename "$f")) = $got"
+  if [ -n "$want" ]; then
+    [ "$got" = "$want" ] || die "校验失败：期望 $want，实际 $got（疑似下载被篡改/损坏，已中止）"
+    say "sha256 校验通过"
+  fi
+}
+
 echo "==================================================="
 echo " Headless Sidecar 安装程序"
 echo "==================================================="
@@ -33,6 +44,7 @@ else
   unzip -oq "$TMP/sl.zip" -d "$TMP/extract"
   BIN="$(find "$TMP/extract" -type f -name 'SidecarLauncher' | head -1)"
   [ -n "$BIN" ] || die "解压后未找到 SidecarLauncher 可执行文件"
+  verify_sha "$BIN" "${SIDECAR_SHA256:-}"
   cp "$BIN" "$SL"; chmod +x "$SL"
   xattr -dr com.apple.quarantine "$SL" 2>/dev/null || true
   rm -rf "$TMP"
@@ -55,6 +67,7 @@ else
           | grep browser_download_url | grep -i '.dmg' | head -1 | cut -d'"' -f4)"
     [ -n "$URL" ] || die "无法获取 BetterDisplay 下载地址"
     TMP="$(mktemp -d)"; curl -fsSL -o "$TMP/bd.dmg" "$URL"
+    verify_sha "$TMP/bd.dmg" "${BD_SHA256:-}"
     VOL="$(hdiutil attach "$TMP/bd.dmg" -nobrowse -quiet | grep -o '/Volumes/.*' | head -1)"
     cp -R "$VOL/BetterDisplay.app" /Applications/ 2>/dev/null \
       || { warn "复制到 /Applications 需要权限，尝试 sudo"; sudo cp -R "$VOL/BetterDisplay.app" /Applications/; }
@@ -82,9 +95,15 @@ PLIST="$LA/com.headless-sidecar.daemon.plist"
 sed -e "s|__DAEMON_PATH__|$HSROOT/src/daemon.sh|g" \
     -e "s|__LOG_DIR__|$HSROOT/logs|g" \
     "$HSROOT/launchagent/com.headless-sidecar.daemon.plist.template" > "$PLIST"
-launchctl unload "$PLIST" 2>/dev/null || true
-launchctl load "$PLIST"
-say "开机自启已加载"
+LABEL="com.headless-sidecar.daemon"
+# 优先用新版 launchctl bootstrap（macOS 11+）；失败再回退旧版 load。
+launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
+if launchctl bootstrap "gui/$(id -u)" "$PLIST" 2>/dev/null; then
+  say "开机自启已加载（bootstrap）"
+else
+  launchctl unload "$PLIST" 2>/dev/null || true
+  launchctl load "$PLIST" && say "开机自启已加载（load 回退）" || warn "LaunchAgent 加载失败，可重启后由 RunAtLoad 拉起"
+fi
 
 # ---- 5. 自检 ----
 echo; say "运行自检..."; echo

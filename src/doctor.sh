@@ -1,6 +1,8 @@
 #!/bin/bash
 # doctor.sh — 自检：环境、硬件、依赖、权限、连通性。只读，不改系统。
+set -uo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
 source "$DIR/common.sh"
 
 GREEN='\033[0;32m'; YEL='\033[0;33m'; RED='\033[0;31m'; DIM='\033[2m'; NC='\033[0m'
@@ -73,10 +75,18 @@ if [ -n "$BD" ]; then
   ok "已安装: $BD"
   if "$BD" get --identifiers >/dev/null 2>&1; then
     ok "BetterDisplay 后台进程在运行，CLI 可用"
+    have_jq && info "jq 可用，使用 JSON 解析显示器信息（更稳）" || warn "未装 jq，回退 awk 解析（仍可用，建议 brew install jq）"
     CNT="$("$BD" get --identifiers 2>/dev/null | grep -c '"UUID"')"
     info "当前识别到 $CNT 块显示器"
     U="$(detect_builtin_uuid)"
     [ -n "$U" ] && ok "已识别内置屏 UUID: $U" || warn "未能自动识别内置屏（可手动在 config.sh 设 BUILTIN_UUID，或用 BetterDisplay 自动断开开关）"
+    SU="$(detect_sidecar_uuid)"
+    if [ -n "$SU" ]; then
+      ok "Sidecar 屏已连接 UUID: $SU"
+      sidecar_is_main && ok "Sidecar 屏当前已是主屏" || warn "Sidecar 已连但还不是主屏（守护进程会自动补设，或手动跑 ./src/arrange.sh）"
+    else
+      info "当前未检测到已连接的 Sidecar 屏（连上后才会出现）"
+    fi
   else
     warn "BetterDisplay 已安装但后台未运行。请打开一次 BetterDisplay 并授予权限，建议开启 ‘Launch at login’"
   fi

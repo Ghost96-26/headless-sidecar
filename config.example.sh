@@ -27,6 +27,21 @@ BUILTIN_UUID=""
 # 是否强制有线 Sidecar（USB-C 连接更稳、更低延迟）。on / off
 SIDECAR_WIRED="on"
 
+# 连上/失败时是否弹 macOS 桌面通知（坏屏看不到日志时有用）。on / off
+NOTIFY="on"
+
+# 日志按大小轮转阈值（字节）。超过则把 run.log 转存为 run.log.1。
+MAX_LOG_BYTES=1048576
+
+# 连接失败的退避上限（秒）与连续失败冷却阈值。
+BACKOFF_MAX=60
+FAIL_LIMIT=5
+
+# 可选：依赖二进制的 sha256 校验值（安装时核对，防止下载被篡改）。
+# 留空则只打印实际哈希、不校验。可先跑一次 install.sh 记录哈希再回填。
+SIDECAR_SHA256=""
+BD_SHA256=""
+
 # ---- 一般无需修改：可执行文件路径覆盖 ----
 # SIDECAR_BIN="$HOME/headless-sidecar/bin/SidecarLauncher"
 # BDCLI="/Applications/BetterDisplay.app/Contents/MacOS/BetterDisplay"

@@ -4,7 +4,9 @@ set -uo pipefail
 HSROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 PLIST="$HOME/Library/LaunchAgents/com.headless-sidecar.daemon.plist"
+LABEL="com.headless-sidecar.daemon"
 echo "==> 停止并移除开机自启..."
+launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
 launchctl unload "$PLIST" 2>/dev/null || true
 rm -f "$PLIST"
 
