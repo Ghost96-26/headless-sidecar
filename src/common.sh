@@ -79,8 +79,16 @@ _bd_identifiers() {
 # BetterDisplay 输出形如 {..},{..}，包一层 [] 即合法 JSON 数组。
 _bd_json() { _bd_identifiers | { printf '['; cat; printf ']'; }; }
 
+# ---- 可达 Sidecar 设备数量（用于多设备保护）----
+ipad_device_count() {
+  local sl; sl="$(sidecar_bin)"; [ -z "$sl" ] && { echo 0; return; }
+  "$sl" devices 2>/dev/null | sed '/^$/d' | grep -c .
+}
+
 # ---- 自动探测 iPad 名称（用于 SidecarLauncher connect）----
 # 优先 config 的 IPAD_NAME；否则用 SidecarLauncher 列出的第一个可达设备。
+# 注意：发现多台设备时仍返回第一台，但调用方应先用 ipad_device_count 提示用户
+# 在 config.sh 显式设置 IPAD_NAME，避免连错设备。
 detect_ipad_name() {
   if [ -n "$IPAD_NAME" ]; then echo "$IPAD_NAME"; return; fi
   local sl; sl="$(sidecar_bin)"
@@ -94,18 +102,22 @@ ipad_plugged() {
   ioreg -p IOUSB -l 2>/dev/null | grep -i '"USB Product Name"' | grep -qi 'ipad'
 }
 
-# ---- 探测 Sidecar 显示器 UUID（已连上才有）----
-# 特征：deviceType=Display 且 name/productName 含 "Sidecar"。
-detect_sidecar_uuid() {
+# ============================================================
+# 纯解析函数：从 stdin 读取 `BetterDisplay get --identifiers` 文本，
+# 输出目标 UUID。与数据源解耦，便于在 CI 用 fixture 做单元测试
+# （见 tests/）。detect_* 只是 `_bd_identifiers | parse_*` 的封装。
+# ============================================================
+
+# 解析 Sidecar 屏 UUID：deviceType=Display 且 name/productName 含 "Sidecar"。
+parse_sidecar_uuid() {
   if have_jq; then
-    _bd_json 2>/dev/null | jq -r '
+    { printf '['; cat; printf ']'; } | jq -r '
       .[] | select(.deviceType=="Display")
       | select((.productName|test("Sidecar";"i")) or (.name|test("Sidecar";"i")))
       | .UUID' 2>/dev/null | head -1
     return
   fi
-  # awk 兜底
-  _bd_identifiers | awk '
+  awk '
     function reset(){ uuid=""; pn=""; nm="" }
     BEGIN{ reset() }
     /"UUID"/        { line=$0; gsub(/[",]/,"",line); n=split(line,a," "); uuid=a[n] }
@@ -117,12 +129,11 @@ detect_sidecar_uuid() {
     }'
 }
 
-# ---- 自动探测内置屏 UUID（跨机型尽量通用）----
-# 特征：registryLocation 含内置面板路径(disp0@ 且非 dispext)，或 productName=Color LCD。
-detect_builtin_uuid() {
-  [ -n "$BUILTIN_UUID" ] && { echo "$BUILTIN_UUID"; return; }
+# 解析内置屏 UUID：registryLocation 含内置面板路径(disp0@ 且非 dispext)，
+# 或 productName=Color LCD，或 name 含 Built-in/内建。
+parse_builtin_uuid() {
   if have_jq; then
-    _bd_json 2>/dev/null | jq -r '
+    { printf '['; cat; printf ']'; } | jq -r '
       .[] | select(.deviceType=="Display")
       | select(((.registryLocation|test("disp0@")) and (.registryLocation|test("dispext")|not))
                or (.productName=="Color LCD")
@@ -130,8 +141,7 @@ detect_builtin_uuid() {
       | .UUID' 2>/dev/null | head -1
     return
   fi
-  # awk 兜底
-  _bd_identifiers | awk '
+  awk '
     function reset(){ uuid=""; pn=""; nm=""; rl="" }
     BEGIN{ reset() }
     /"UUID"/        { line=$0; gsub(/[",]/,"",line); n=split(line,a," "); uuid=a[n] }
@@ -146,6 +156,15 @@ detect_builtin_uuid() {
       if (builtin && uuid!="") { print uuid; exit }
       reset()
     }'
+}
+
+# ---- 探测 Sidecar 显示器 UUID（已连上才有）----
+detect_sidecar_uuid() { _bd_identifiers | parse_sidecar_uuid; }
+
+# ---- 自动探测内置屏 UUID（跨机型尽量通用）----
+detect_builtin_uuid() {
+  [ -n "$BUILTIN_UUID" ] && { echo "$BUILTIN_UUID"; return; }
+  _bd_identifiers | parse_builtin_uuid
 }
 
 # ---- Sidecar 是否已激活（按 UUID 判定，而非名字）----

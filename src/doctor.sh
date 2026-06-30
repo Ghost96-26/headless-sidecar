@@ -63,6 +63,9 @@ if [ -n "$SL" ]; then
     DEVS="$("$SL" devices 2>/dev/null | sed '/^$/d')"
     if [ -n "$DEVS" ]; then
       ok "可达 Sidecar 设备:"; echo "$DEVS" | while read -r d; do info "→ $d"; done
+      if [ -z "$IPAD_NAME" ] && [ "$(ipad_device_count)" -gt 1 ] 2>/dev/null; then
+        warn "发现多台设备但未设 IPAD_NAME，守护进程会盲选第一台，可能连错。请在 config.sh 设置 IPAD_NAME"
+      fi
     else
       warn "未发现可达 iPad。请确认：iPad 已解锁、与 Mac 同一 Apple ID、蓝牙/WiFi 开启、或已用 USB-C 连接"
     fi
