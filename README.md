@@ -47,9 +47,9 @@
    - Mac 与 iPad **登录同一个 Apple ID**，且都开启双重认证；
    - 双方都开 **蓝牙 + Wi-Fi**（即使用 USB-C 线，握手仍依赖它们）、开启 Handoff；
    - 机型与系统满足苹果 Sidecar 要求（macOS 10.15+ / iPadOS 13+）。
-3. **依赖两个第三方工具**（安装脚本会自动获取）：
-   - [SidecarLauncher](https://github.com/Ocasio-J/SidecarLauncher)：命令行发起 Sidecar 连接（使用私有 API，**可能随 macOS 更新失效**）；
-   - [BetterDisplay](https://github.com/waydabber/BetterDisplay)：设置主屏、断开内置屏。
+3. **依赖两个第三方工具**：
+   - [SidecarLauncher](https://github.com/Ocasio-J/SidecarLauncher)：命令行发起 Sidecar 连接（使用私有 API，**可能随 macOS 更新失效**）。本项目**不下载它的预编译二进制**，而是从仓库 `vendor/` 下已审计冻结的源码**本地编译**——因此首次安装需要 **Xcode 命令行工具**（`xcode-select --install`）。
+   - [BetterDisplay](https://github.com/waydabber/BetterDisplay)：设置主屏、断开内置屏。安装脚本下载其**官方已公证 dmg**（固定版本 + sha256 校验）。
 4. **首次设置需要看得见画面一次**：授予权限、勾选 BetterDisplay 的开机自启等。请在屏幕还能看见时、或临时借一台外接显示器/电视/诱骗器完成一次，之后永久生效。
 
 ---
@@ -82,7 +82,7 @@
 - **跨机型自适应**：iPad 名称、Sidecar 屏 / 内置屏 UUID 全部**运行时自动探测**，无硬编码。
 - **一切按 UUID 操作**：Sidecar 屏在 BetterDisplay 里实际叫 `Sidecar Display`（不叫 `iPad`），故设主屏 / 判断状态全部以 UUID 为准，避免按名字匹配在真机上失效。
 - **失败退避 + 冷却（不放弃）**：连接失败按指数退避（4→8→…→封顶 `BACKOFF_MAX`），连续失败 `FAIL_LIMIT` 次进入冷却、只告警一次不刷日志；但冷却中**仍按 `BACKOFF_MAX` 间隔持续静默重试，连上即自动恢复**。
-- **供应链安全**：依赖采用**固定版本 + 内置 sha256 强校验**（SidecarLauncher `1.2` / BetterDisplay `v4.3.4`），下载物指纹不匹配即中止；只对**已校验**的 SidecarLauncher 解除隔离，BetterDisplay 交回 Gatekeeper 验证。确需跳过校验用 `ALLOW_UNVERIFIED=1`（不推荐）。
+- **供应链安全（零预编译二进制信任）**：SidecarLauncher 不下载二进制，而是从仓库 `vendor/` 下**已审计、按固定 commit 冻结**的源码本地编译——上游仓库即便日后被投毒/篡改也碰不到你的用户；本地编译产物不带 Gatekeeper 隔离，无需任何 `xattr` 操作。BetterDisplay 用**官方已公证 dmg + 固定版本 sha256 强校验**，不匹配即中止（可 `ALLOW_UNVERIFIED=1` 跳过，不推荐）。详见 [`vendor/SidecarLauncher/NOTICE.md`](vendor/SidecarLauncher/NOTICE.md)。
 - **桌面通知**：连上设主屏成功 / 反复失败时弹 macOS 通知（坏屏看不到日志时也能知道结果）。
 - **日志轮转**：`run.log` 超过 `MAX_LOG_BYTES` 自动转存，长期常驻不胀大。
 - **解析更稳**：优先用 `jq` 解析 BetterDisplay 输出，无 `jq` 时回退 `awk`。
@@ -111,7 +111,7 @@ cd headless-sidecar
 chmod +x install.sh
 ./install.sh
 ```
-安装脚本会自动：下载 SidecarLauncher、安装 BetterDisplay、生成配置、装好开机自启、并跑一次自检。
+安装脚本会自动：**从源码本地编译** SidecarLauncher（需 Xcode 命令行工具）、下载安装 BetterDisplay、生成配置、装好开机自启、并跑一次自检。
 
 ### 第 4 步：完成两个手动确认（重要）
 1. 打开 **BetterDisplay**（首次会弹权限请求，全部允许）→ 进设置 → 勾选 **Launch at login（登录时启动）**。
@@ -171,6 +171,8 @@ headless-sidecar/
 ├── install.sh                 # 一键安装：拉依赖 + 配置 + 自启 + 自检
 ├── uninstall.sh               # 卸载自启、恢复内置屏
 ├── config.example.sh          # 配置模板（用户 cp 成 config.sh）
+├── vendor/
+│   └── SidecarLauncher/        # 已审计冻结的上游源码(main.swift)+LICENSE+NOTICE，安装时本地编译
 ├── launchagent/
 │   └── com.headless-sidecar.daemon.plist.template  # 自启模板（含占位符）
 └── src/
@@ -228,7 +230,7 @@ A：不会。`ioreg` 检测极轻量、5 秒一次，对续航几乎无感，对
 ---
 
 ## 🙏 致谢与依赖
-- [Ocasio-J/SidecarLauncher](https://github.com/Ocasio-J/SidecarLauncher) — 命令行 Sidecar 连接
+- [Ocasio-J/SidecarLauncher](https://github.com/Ocasio-J/SidecarLauncher) — 命令行 Sidecar 连接（MIT，© 2023 Jovany Ocasio）。其源码已按固定 commit vendored 进本仓库 `vendor/SidecarLauncher/`（保留原 LICENSE，未改动），安装时本地编译。
 - [waydabber/BetterDisplay](https://github.com/waydabber/BetterDisplay) — 显示器管理 / 内置屏断开
 - 同类思路参考：[wberry9813/SideLinker](https://github.com/wberry9813/SideLinker)、[raonehere/sidecar-autoconnect](https://github.com/raonehere/sidecar-autoconnect)
 

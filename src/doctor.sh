@@ -49,11 +49,16 @@ case "$MODEL" in
     warn "未能确认机型是否支持 Sidecar，请对照苹果官方支持列表" ;;
 esac
 
-# ---- 3. 依赖：SidecarLauncher ----
+# ---- 3. 依赖：SidecarLauncher（本地从 vendored 源码编译）----
 echo; echo "[3] 依赖 — SidecarLauncher"
+if command -v swiftc >/dev/null 2>&1; then
+  ok "swiftc 可用（可从源码本地编译，无需下载二进制）"
+else
+  warn "未找到 swiftc。首次安装需 Xcode 命令行工具： xcode-select --install"
+fi
 SL="$(sidecar_bin)"
 if [ -n "$SL" ]; then
-  ok "已安装: $SL"
+  ok "已安装（本地编译产物）: $SL"
   if "$SL" devices >/dev/null 2>&1; then
     DEVS="$("$SL" devices 2>/dev/null | sed '/^$/d')"
     if [ -n "$DEVS" ]; then
@@ -65,7 +70,7 @@ if [ -n "$SL" ]; then
     warn "SidecarLauncher 无法运行（可能因 macOS 更新导致私有 API 失效）"
   fi
 else
-  bad "未安装 SidecarLauncher，请运行 ./install.sh"
+  bad "未编译 SidecarLauncher，请运行 ./install.sh（会从 vendor/ 源码本地编译）"
 fi
 
 # ---- 4. 依赖：BetterDisplay ----

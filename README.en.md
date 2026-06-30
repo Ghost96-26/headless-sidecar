@@ -45,9 +45,9 @@ This tool **fully automates** the whole "after login" sequence: detect iPad → 
    - Mac and iPad **signed into the same Apple ID**, both with two-factor auth enabled;
    - Both have **Bluetooth + Wi-Fi** on (the handshake relies on them even over USB-C) and Handoff enabled;
    - Model and OS meet Apple's Sidecar requirements (macOS 10.15+ / iPadOS 13+).
-3. **It depends on two third-party tools** (the installer fetches them automatically):
-   - [SidecarLauncher](https://github.com/Ocasio-J/SidecarLauncher): starts a Sidecar connection from the command line (uses a private API, **may break with macOS updates**);
-   - [BetterDisplay](https://github.com/waydabber/BetterDisplay): sets the primary display and disconnects the internal screen.
+3. **It depends on two third-party tools:**
+   - [SidecarLauncher](https://github.com/Ocasio-J/SidecarLauncher): starts a Sidecar connection from the command line (uses a private API, **may break with macOS updates**). This project does **not** download its prebuilt binary — it **compiles it locally** from audited, frozen source under `vendor/`, so first-time install needs the **Xcode Command Line Tools** (`xcode-select --install`).
+   - [BetterDisplay](https://github.com/waydabber/BetterDisplay): sets the primary display and disconnects the internal screen. The installer downloads its **officially notarized dmg** (pinned version + sha256 check).
 4. **First-time setup needs a visible screen once**: to grant permissions, tick BetterDisplay's launch-at-login, etc. Do it while the screen still works, or borrow an external monitor/TV/dongle once — after that it's permanent.
 
 ---
@@ -80,7 +80,7 @@ Design highlights:
 - **Cross-model adaptive**: iPad name, Sidecar-display / internal-display UUIDs are all **auto-detected at runtime** — nothing hard-coded.
 - **Everything keyed by UUID**: in BetterDisplay the Sidecar screen is actually named `Sidecar Display` (not `iPad`), so setting the primary / checking state is all done by UUID, avoiding name-matching that fails on real hardware.
 - **Failure backoff + cooldown (never gives up)**: connection failures back off exponentially (4→8→… capped at `BACKOFF_MAX`); after `FAIL_LIMIT` consecutive failures it enters a cooldown and warns only once instead of spamming the log — but **keeps retrying silently at the `BACKOFF_MAX` interval and recovers automatically once it connects**.
-- **Supply-chain safety**: dependencies are installed from **pinned versions with built-in mandatory sha256 verification** (SidecarLauncher `1.2` / BetterDisplay `v4.3.4`); a fingerprint mismatch aborts the install. Quarantine is removed **only** for the verified SidecarLauncher; BetterDisplay is left for Gatekeeper to verify. To skip verification (not recommended) use `ALLOW_UNVERIFIED=1`.
+- **Supply-chain safety (zero prebuilt-binary trust)**: SidecarLauncher is **not** downloaded as a binary — it's compiled locally from **audited source frozen at a pinned commit** under `vendor/`, so a future compromise of the upstream repo can't reach your users; a locally compiled binary carries no Gatekeeper quarantine, so no `xattr` games are needed. BetterDisplay uses the **officially notarized dmg with a pinned-version sha256 check**, aborting on mismatch (skippable with `ALLOW_UNVERIFIED=1`, not recommended). See [`vendor/SidecarLauncher/NOTICE.md`](vendor/SidecarLauncher/NOTICE.md).
 - **Desktop notifications**: pops a macOS notification when it succeeds at setting the primary, or when it keeps failing (so you know the result even when the screen is dead).
 - **Log rotation**: `run.log` is rotated once it exceeds `MAX_LOG_BYTES`, so a long-running daemon doesn't bloat it.
 - **Sturdier parsing**: prefers `jq` to parse BetterDisplay output, falling back to `awk` when `jq` is absent.
@@ -109,7 +109,7 @@ cd headless-sidecar
 chmod +x install.sh
 ./install.sh
 ```
-The installer automatically downloads SidecarLauncher, installs BetterDisplay, generates the config, sets up launch-at-login, and runs a self-check.
+The installer automatically **compiles SidecarLauncher from source** (needs Xcode Command Line Tools), downloads and installs BetterDisplay, generates the config, sets up launch-at-login, and runs a self-check.
 
 ### Step 4: Complete two manual confirmations (important)
 1. Open **BetterDisplay** (it will request permissions on first launch — allow all) → Settings → tick **Launch at login**.
@@ -169,6 +169,8 @@ headless-sidecar/
 ├── install.sh                 # one-command install: deps + config + autostart + self-check
 ├── uninstall.sh               # remove autostart, restore internal screen
 ├── config.example.sh          # config template (users cp it to config.sh)
+├── vendor/
+│   └── SidecarLauncher/        # audited, frozen upstream source (main.swift) + LICENSE + NOTICE; compiled locally at install
 ├── launchagent/
 │   └── com.headless-sidecar.daemon.plist.template  # autostart template (with placeholders)
 └── src/
@@ -226,7 +228,7 @@ It stops and removes launch-at-login, ends the daemon, tries to restore the inte
 ---
 
 ## 🙏 Acknowledgements & dependencies
-- [Ocasio-J/SidecarLauncher](https://github.com/Ocasio-J/SidecarLauncher) — command-line Sidecar connection
+- [Ocasio-J/SidecarLauncher](https://github.com/Ocasio-J/SidecarLauncher) — command-line Sidecar connection (MIT, © 2023 Jovany Ocasio). Its source is vendored at a pinned commit under `vendor/SidecarLauncher/` (original LICENSE kept, unmodified) and compiled locally at install time.
 - [waydabber/BetterDisplay](https://github.com/waydabber/BetterDisplay) — display management / internal-screen disconnect
 - Similar approaches for reference: [wberry9813/SideLinker](https://github.com/wberry9813/SideLinker), [raonehere/sidecar-autoconnect](https://github.com/raonehere/sidecar-autoconnect)
 

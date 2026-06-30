@@ -30,12 +30,14 @@ verify_sha(){
   fi
 }
 
-# ---- 固定依赖版本与校验和（供应链安全锚点）----
-# 默认对下载物做强校验。升级依赖时：改版本号，并用
-#   curl -fsSL <url> | shasum -a 256
-# 重新计算填到这里（或安装时用 SIDECAR_SHA256 / BD_SHA256 覆盖）。
-SIDECAR_VERSION="${SIDECAR_VERSION:-1.2}"
-SIDECAR_ZIP_SHA256="${SIDECAR_SHA256:-fc3df81639f400aaff9b44ba20650cf56ef2f73a033b927bbe378cb3c73b9764}"
+# ---- 依赖供应链锚点 ----
+# SidecarLauncher：不下载任何预编译二进制，改为从本仓库 vendor/ 下**已审计冻结**
+#   的源码本地编译（见 vendor/SidecarLauncher/NOTICE.md）。下方哈希用于在编译前
+#   校验 vendored 源码未被本地篡改。
+SWIFT_SRC="$HSROOT/vendor/SidecarLauncher/main.swift"
+SWIFT_SRC_SHA256="fae6395bc283dada7ba61cbe179c91ec1632e4f8b6b00a5057ece00705a9a35a"
+# BetterDisplay：仍用官方已公证 dmg（固定版本 + sha256 强校验）。升级时改版本号并用
+#   curl -fsSL <url> | shasum -a 256 重算填这里（或安装时 BD_SHA256= 覆盖）。
 BD_VERSION="${BD_VERSION:-v4.3.4}"
 BD_DMG_SHA256="${BD_SHA256:-234122f7e4ec6e6b00ea2143d42c12720ad4ece3bd98bddf977feebc2612e092}"
 
@@ -49,26 +51,24 @@ OSV="$(sw_vers -productVersion)"; say "macOS $OSV / $(uname -m)"
 
 mkdir -p "$HSROOT/bin" "$HSROOT/logs"
 
-# ---- 1. 安装 SidecarLauncher（GitHub release 二进制）----
+# ---- 1. 从已审计的 vendored 源码本地编译 SidecarLauncher（不下载二进制）----
 SL="$HSROOT/bin/SidecarLauncher"
 if [ -x "$SL" ] && "$SL" devices >/dev/null 2>&1; then
-  say "SidecarLauncher 已就绪"
+  say "SidecarLauncher 已就绪（本地编译产物）"
 else
-  say "下载 SidecarLauncher（固定版本 $SIDECAR_VERSION）..."
-  URL="https://github.com/Ocasio-J/SidecarLauncher/releases/download/${SIDECAR_VERSION}/SidecarLauncher.zip"
-  TMP="$(mktemp -d)"
-  curl -fsSL -o "$TMP/sl.zip" "$URL" || die "下载 SidecarLauncher 失败（检查网络或固定版本是否仍存在）"
-  # 先校验下载物（供应链锚点），通过后再解压
-  verify_sha "$TMP/sl.zip" "$SIDECAR_ZIP_SHA256" "SidecarLauncher.zip"
-  unzip -oq "$TMP/sl.zip" -d "$TMP/extract"
-  BIN="$(find "$TMP/extract" -type f -name 'SidecarLauncher' | head -1)"
-  [ -n "$BIN" ] || die "解压后未找到 SidecarLauncher 可执行文件"
-  cp "$BIN" "$SL"; chmod +x "$SL"
-  # 仅对“已通过 sha256 校验”的 SidecarLauncher 解除隔离（未签名 CLI，需此步才能 headless 运行）
-  xattr -dr com.apple.quarantine "$SL" 2>/dev/null || true
-  rm -rf "$TMP"
-  if "$SL" devices >/dev/null 2>&1; then say "SidecarLauncher 安装成功"
-  else warn "SidecarLauncher 安装了但运行异常（可能 macOS 私有 API 失效），稍后用 doctor 复查"; fi
+  [ -f "$SWIFT_SRC" ] || die "缺少 vendored 源码 $SWIFT_SRC（仓库不完整？）"
+  # 编译前校验 vendored 源码完整性（防本地被篡改）
+  verify_sha "$SWIFT_SRC" "$SWIFT_SRC_SHA256" "SidecarLauncher 源码"
+  command -v swiftc >/dev/null 2>&1 || die "未找到 swiftc。请先装 Xcode 命令行工具： xcode-select --install （装好后重跑本脚本）"
+  say "从源码本地编译 SidecarLauncher（vendor/SidecarLauncher，无预编译二进制）..."
+  if swiftc -O "$SWIFT_SRC" -o "$SL" 2>>"$HSROOT/logs/build.log"; then
+    chmod +x "$SL"
+    # 本地编译的产物不带 Gatekeeper quarantine，无需任何 xattr 操作。
+    if "$SL" devices >/dev/null 2>&1; then say "SidecarLauncher 编译并自检成功"
+    else warn "SidecarLauncher 编译成功但运行异常（可能 macOS 私有 API 已变化），稍后用 doctor 复查"; fi
+  else
+    die "SidecarLauncher 编译失败，详见 logs/build.log"
+  fi
 fi
 
 # ---- 2. 安装 BetterDisplay ----

@@ -45,9 +45,9 @@ Dieses Tool **automatisiert** die gesamte Abfolge „nach der Anmeldung" vollst�
    - Mac und iPad **mit derselben Apple-ID** angemeldet, beide mit Zwei-Faktor-Authentifizierung;
    - Bei beiden **Bluetooth + WLAN** an (der Handshake nutzt sie selbst über USB-C) und Handoff aktiviert;
    - Modell und Betriebssystem erfüllen Apples Sidecar-Anforderungen (macOS 10.15+ / iPadOS 13+).
-3. **Es hängt von zwei Drittanbieter-Tools ab** (der Installer holt sie automatisch):
-   - [SidecarLauncher](https://github.com/Ocasio-J/SidecarLauncher): startet eine Sidecar-Verbindung über die Kommandozeile (nutzt eine private API, **kann bei macOS-Updates kaputtgehen**);
-   - [BetterDisplay](https://github.com/waydabber/BetterDisplay): setzt den Hauptbildschirm und trennt das interne Display.
+3. **Es hängt von zwei Drittanbieter-Tools ab:**
+   - [SidecarLauncher](https://github.com/Ocasio-J/SidecarLauncher): startet eine Sidecar-Verbindung über die Kommandozeile (nutzt eine private API, **kann bei macOS-Updates kaputtgehen**). Dieses Projekt lädt **kein** vorkompiliertes Binary herunter, sondern **kompiliert es lokal** aus auditiertem, eingefrorenem Quellcode unter `vendor/`. Die Erstinstallation braucht daher die **Xcode Command Line Tools** (`xcode-select --install`).
+   - [BetterDisplay](https://github.com/waydabber/BetterDisplay): setzt den Hauptbildschirm und trennt das interne Display. Der Installer lädt das **offiziell notarisierte dmg** (gepinnte Version + sha256-Prüfung).
 4. **Die Ersteinrichtung braucht einmal ein sichtbares Bild**: um Berechtigungen zu erteilen, BetterDisplays „Beim Anmelden öffnen" anzuhaken usw. Mach das, solange das Display noch funktioniert, oder leih dir einmal einen externen Monitor/TV/Dongle — danach gilt es dauerhaft.
 
 ---
@@ -80,7 +80,7 @@ Design-Highlights:
 - **Modellübergreifend adaptiv**: iPad-Name, UUIDs von Sidecar- / internem Display werden alle **zur Laufzeit automatisch erkannt** — nichts ist fest codiert.
 - **Alles über UUID gesteuert**: In BetterDisplay heißt der Sidecar-Bildschirm tatsächlich `Sidecar Display` (nicht `iPad`); daher erfolgen das Setzen des Hauptbildschirms und Statusprüfungen alle über die UUID, um Namensabgleich zu vermeiden, der auf echter Hardware fehlschlägt.
 - **Fehler-Backoff + Abkühlung (gibt nie auf)**: Verbindungsfehler werden exponentiell zurückgestellt (4→8→… begrenzt durch `BACKOFF_MAX`); nach `FAIL_LIMIT` aufeinanderfolgenden Fehlern geht es in eine Abkühlphase und warnt nur einmal, statt das Log zu fluten — **versucht es aber im `BACKOFF_MAX`-Intervall weiterhin still und stellt sich automatisch wieder her, sobald es verbindet**.
-- **Lieferketten-Sicherheit**: Abhängigkeiten werden aus **fest gepinnten Versionen mit eingebauter, verpflichtender sha256-Prüfung** installiert (SidecarLauncher `1.2` / BetterDisplay `v4.3.4`); ein Fingerprint-Unterschied bricht die Installation ab. Die Quarantäne wird **nur** beim verifizierten SidecarLauncher entfernt; BetterDisplay überlässt man Gatekeeper. Zum Überspringen der Prüfung (nicht empfohlen) `ALLOW_UNVERIFIED=1` setzen.
+- **Lieferketten-Sicherheit (null Vertrauen in vorkompilierte Binaries)**: SidecarLauncher wird **nicht** als Binary heruntergeladen, sondern lokal aus **auditiertem, auf einen festen Commit eingefrorenem Quellcode** unter `vendor/` kompiliert — eine spätere Kompromittierung des Upstream-Repos erreicht deine Nutzer also nicht; ein lokal kompiliertes Binary trägt keine Gatekeeper-Quarantäne, daher sind keine `xattr`-Tricks nötig. BetterDisplay nutzt das **offiziell notarisierte dmg mit gepinnter Versions-sha256-Prüfung** und bricht bei Abweichung ab (mit `ALLOW_UNVERIFIED=1` überspringbar, nicht empfohlen). Siehe [`vendor/SidecarLauncher/NOTICE.md`](vendor/SidecarLauncher/NOTICE.md).
 - **Desktop-Benachrichtigungen**: zeigt eine macOS-Benachrichtigung, wenn das Setzen des Hauptbildschirms gelingt oder wenn es wiederholt fehlschlägt (so kennst du das Ergebnis auch bei totem Display).
 - **Log-Rotation**: `run.log` wird rotiert, sobald es `MAX_LOG_BYTES` überschreitet, damit ein dauerhaft laufender Daemon es nicht aufbläht.
 - **Robusteres Parsen**: bevorzugt `jq` zum Parsen der BetterDisplay-Ausgabe und fällt auf `awk` zurück, wenn `jq` fehlt.
@@ -109,7 +109,7 @@ cd headless-sidecar
 chmod +x install.sh
 ./install.sh
 ```
-Der Installer lädt automatisch SidecarLauncher herunter, installiert BetterDisplay, erzeugt die Konfiguration, richtet den Autostart ein und führt einen Selbsttest aus.
+Der Installer **kompiliert SidecarLauncher aus dem Quellcode** (braucht die Xcode Command Line Tools), lädt und installiert BetterDisplay, erzeugt die Konfiguration, richtet den Autostart ein und führt einen Selbsttest aus.
 
 ### Schritt 4: Zwei manuelle Bestätigungen abschließen (wichtig)
 1. Öffne **BetterDisplay** (beim ersten Start werden Berechtigungen abgefragt — alle erlauben) → Einstellungen → hake **Launch at login (Beim Anmelden öffnen)** an.
@@ -169,6 +169,8 @@ headless-sidecar/
 ├── install.sh                 # Installation mit einem Befehl: Abhängigkeiten + Konfig + Autostart + Selbsttest
 ├── uninstall.sh               # Autostart entfernen, internes Display wiederherstellen
 ├── config.example.sh          # Konfigurationsvorlage (Nutzer kopieren sie zu config.sh)
+├── vendor/
+│   └── SidecarLauncher/        # auditierter, eingefrorener Upstream-Quellcode (main.swift) + LICENSE + NOTICE; lokal bei Installation kompiliert
 ├── launchagent/
 │   └── com.headless-sidecar.daemon.plist.template  # Autostart-Vorlage (mit Platzhaltern)
 └── src/
@@ -226,7 +228,7 @@ Es stoppt und entfernt den Autostart, beendet den Daemon, versucht die interne D
 ---
 
 ## 🙏 Danksagung & Abhängigkeiten
-- [Ocasio-J/SidecarLauncher](https://github.com/Ocasio-J/SidecarLauncher) — Sidecar-Verbindung über die Kommandozeile
+- [Ocasio-J/SidecarLauncher](https://github.com/Ocasio-J/SidecarLauncher) — Sidecar-Verbindung über die Kommandozeile (MIT, © 2023 Jovany Ocasio). Sein Quellcode ist auf einen festen Commit unter `vendor/SidecarLauncher/` vendored (Original-LICENSE beibehalten, unverändert) und wird bei der Installation lokal kompiliert.
 - [waydabber/BetterDisplay](https://github.com/waydabber/BetterDisplay) — Display-Verwaltung / Trennen des internen Displays
 - Ähnliche Ansätze als Referenz: [wberry9813/SideLinker](https://github.com/wberry9813/SideLinker), [raonehere/sidecar-autoconnect](https://github.com/raonehere/sidecar-autoconnect)
 
