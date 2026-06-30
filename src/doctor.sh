@@ -1,5 +1,5 @@
 #!/bin/bash
-# doctor.sh — 自检：环境、硬件、依赖、权限、连通性。只读，不改系统。
+# 自检：环境、硬件、依赖、配置、连通性。只读，不改系统。
 set -uo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
@@ -15,7 +15,7 @@ echo "==================================================="
 echo " Headless Sidecar — 自检 (doctor)"
 echo "==================================================="
 
-# ---- 1. 操作系统 ----
+# 1. 操作系统
 echo; echo "[1] macOS 版本"
 OSV="$(sw_vers -productVersion 2>/dev/null)"
 OSMAJ="${OSV%%.*}"
@@ -29,7 +29,7 @@ else
   bad "无法读取 macOS 版本"
 fi
 
-# ---- 2. 芯片架构 ----
+# 2. 芯片架构
 echo; echo "[2] 芯片 / 机型"
 ARCH="$(uname -m)"
 MODEL="$(sysctl -n hw.model 2>/dev/null)"
@@ -49,7 +49,7 @@ case "$MODEL" in
     warn "未能确认机型是否支持 Sidecar，请对照苹果官方支持列表" ;;
 esac
 
-# ---- 3. 依赖：SidecarLauncher（本地从 vendored 源码编译）----
+# 3. 依赖：SidecarLauncher（本地从源码编译）
 echo; echo "[3] 依赖 — SidecarLauncher"
 if command -v swiftc >/dev/null 2>&1; then
   ok "swiftc 可用（可从源码本地编译，无需下载二进制）"
@@ -76,7 +76,7 @@ else
   bad "未编译 SidecarLauncher，请运行 ./install.sh（会从 vendor/ 源码本地编译）"
 fi
 
-# ---- 4. 依赖：BetterDisplay ----
+# 4. 依赖：BetterDisplay
 echo; echo "[4] 依赖 — BetterDisplay"
 BD="$(bd_cli)"
 if [ -n "$BD" ]; then
@@ -102,11 +102,11 @@ else
   bad "未安装 BetterDisplay，请运行 ./install.sh"
 fi
 
-# ---- 5. iPad 物理连接 ----
+# 5. iPad 物理连接
 echo; echo "[5] iPad USB 连接"
 if ipad_plugged; then ok "检测到 iPad 经 USB 连接"; else info "当前未检测到 USB 连接的 iPad（无线 Sidecar 也可用）"; fi
 
-# ---- 6. 配置 ----
+# 6. 配置
 echo; echo "[6] 配置"
 if [ -f "$HSROOT/config.sh" ]; then
   ok "config.sh 存在"
@@ -116,7 +116,7 @@ else
   warn "未创建 config.sh（将使用默认值并自动探测）。可 cp config.example.sh config.sh 自定义"
 fi
 
-# ---- 7. 开机自启 ----
+# 7. 开机自启
 echo; echo "[7] 开机自启 (LaunchAgent)"
 PLIST="$HOME/Library/LaunchAgents/com.headless-sidecar.daemon.plist"
 if [ -f "$PLIST" ]; then
@@ -127,6 +127,6 @@ else
 fi
 
 echo; echo "==================================================="
-echo " 提示：本工具无法跳过登录界面——开机后输密码那一步"
+echo " 提示：本工具无法跳过登录界面，开机后输密码那一步"
 echo " iPad 仍是黑的，需盲打密码；登录后才会自动上屏。"
 echo "==================================================="

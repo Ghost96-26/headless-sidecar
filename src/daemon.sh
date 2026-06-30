@@ -1,9 +1,7 @@
 #!/bin/bash
-# daemon.sh — 守护进程：检测 iPad 插入 -> 连 Sidecar -> 设为唯一主屏。
-# 由 LaunchAgent 在登录后拉起；也可手动运行调试。
-#
-# 健壮性：连接失败采用指数退避；连续失败到 FAIL_LIMIT 进入冷却并告警，
-# 避免握手失败时每个周期硬连、刷爆日志。显式状态跟踪以减少重复动作与噪音。
+# 守护进程：检测 iPad 插入，连 Sidecar，设为唯一主屏。
+# 由 LaunchAgent 登录后拉起，也可手动运行调试。
+# 连接失败用指数退避，连续失败到 FAIL_LIMIT 进入冷却，避免每周期硬连刷日志。
 set -uo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
@@ -23,10 +21,9 @@ connect_sidecar() {
 }
 
 log "[daemon] 启动，目标 iPad=\"$(detect_ipad_name)\" 间隔=${POLL_INTERVAL}s 退避上限=${BACKOFF_MAX}s"
-# 多设备保护：未显式指定 IPAD_NAME 且发现多台可达设备时，会盲选第一台，
-# 可能连错。提醒用户在 config.sh 设置 IPAD_NAME。
+# 未设 IPAD_NAME 且有多台可达设备时会盲选第一台，提醒用户显式指定
 if [ -z "$IPAD_NAME" ] && [ "$(ipad_device_count)" -gt 1 ] 2>/dev/null; then
-  log "[daemon] ⚠ 发现多台可达 Sidecar 设备，未设 IPAD_NAME，将盲选第一台。建议在 config.sh 显式设置 IPAD_NAME"
+  log "[daemon] 发现多台可达 Sidecar 设备，未设 IPAD_NAME，将盲选第一台。建议在 config.sh 设置 IPAD_NAME"
   notify "发现多台设备，建议在 config.sh 指定 IPAD_NAME"
 fi
 trap 'log "[daemon] 退出"' EXIT
@@ -45,7 +42,7 @@ while true; do
         "$DIR/arrange.sh"
         if [ "$arranged" -eq 0 ] && sidecar_is_main; then
           arranged=1
-          notify "iPad 已设为主屏 ✅"
+          notify "iPad 已设为主屏"
           log "[daemon] iPad 已成为主屏"
         fi
       else
@@ -64,11 +61,11 @@ while true; do
       else
         log "[daemon] 检测到 iPad 已插入但未连，发起 Sidecar...（已失败 ${fails} 次）"
       fi
-      # 无论是否冷却都真正尝试连接（修复：冷却不再放弃）
+      # 无论是否冷却都真正尝试连接，冷却只是拉长间隔
       if connect_sidecar; then
         sleep 4
         if sidecar_active; then
-          [ "$in_cooldown" -eq 1 ] && { log "[daemon] 冷却中重试成功，已恢复连接"; notify "Sidecar 已恢复连接 ✅"; }
+          [ "$in_cooldown" -eq 1 ] && { log "[daemon] 冷却中重试成功，已恢复连接"; notify "Sidecar 已恢复连接"; }
           fails=0; cooldown_warned=0
         else
           fails=$((fails+1))

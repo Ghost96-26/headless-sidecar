@@ -4,9 +4,7 @@
 
 # Headless Sidecar 🏍️ — 让屏幕坏掉的 Mac 自动用 iPad 当主显示器
 
-> **一句话**：MacBook 内置屏坏了？插上 iPad，登录后它会**自动连上 Sidecar 并把 iPad 设为唯一主屏**，无需每次手动点控制中心。专为「无头骑士」（headless / 坏屏）Mac 打造。
->
-> **TL;DR (English)**: Broken-screen Mac? This tool auto-connects your iPad via Sidecar and makes it the **sole primary display** right after you log in. Built for headless / broken-internal-display Macs.
+> MacBook 内置屏坏了？插上 iPad，登录后它会自动连上 Sidecar 并把 iPad 设为唯一主屏，无需每次手动点控制中心。专为坏屏 / 无头 Mac 打造。
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2010.15%2B-blue)]()
 [![Shell](https://img.shields.io/badge/shell-bash-green)]()

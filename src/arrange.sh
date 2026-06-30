@@ -1,6 +1,5 @@
 #!/bin/bash
-# arrange.sh — Sidecar 连上后，把 iPad 设为唯一主屏，并按需断开内置屏。
-# 全程以 UUID 为准（Sidecar 屏在 BetterDisplay 里叫 "Sidecar Display"，按名字匹配会失败）。
+# Sidecar 连上后把 iPad 设为唯一主屏，并按需断开内置屏。全程按 UUID 操作。
 set -uo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
@@ -18,17 +17,15 @@ if [ -z "$SIDECAR_UUID" ]; then
   exit 1
 fi
 
-# 1) 把 Sidecar 屏设为主屏（菜单栏/Dock 落到 iPad）
+# 设 Sidecar 屏为主屏，菜单栏/Dock 落到 iPad
 if "$BD" set --uuid="$SIDECAR_UUID" --main=on >>"$LOG_FILE" 2>&1; then
   log "[arrange] 已将 Sidecar 屏设为主屏 ($SIDECAR_UUID)"
 else
   log "[arrange] 设置主屏失败 ($SIDECAR_UUID)"
 fi
 
-# 2) 断开坏掉的内置屏（可选）。
-#    推荐优先用 BetterDisplay 设置里的开关：
-#    "Auto-disconnect built-in screen upon connecting an external display"（Apple Silicon）。
-#    脚本断开作为补充/Intel 兜底。
+# 断开内置屏（可选）。Apple Silicon 上也可改用 BetterDisplay 的
+# "Auto-disconnect built-in screen upon connecting an external display" 开关。
 if [ "$DISABLE_BUILTIN" != "off" ]; then
   UUID="$(detect_builtin_uuid)"
   if [ -n "$UUID" ]; then
