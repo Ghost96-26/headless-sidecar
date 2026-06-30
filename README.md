@@ -8,6 +8,8 @@
 [![Shell](https://img.shields.io/badge/shell-bash-green)]()
 [![License](https://img.shields.io/badge/license-MIT-lightgrey)]()
 
+**🌐 语言 / Language / Sprache:** **中文** · [English](README.en.md) · [Deutsch](README.de.md)
+
 ---
 
 ## 📑 目录
