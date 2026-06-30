@@ -81,7 +81,8 @@
 - **不依赖 UI 自动化**：用 SidecarLauncher 二进制而非 AppleScript 点控制中心，避免 launchd 下「辅助功能权限」不稳的坑。
 - **跨机型自适应**：iPad 名称、Sidecar 屏 / 内置屏 UUID 全部**运行时自动探测**，无硬编码。
 - **一切按 UUID 操作**：Sidecar 屏在 BetterDisplay 里实际叫 `Sidecar Display`（不叫 `iPad`），故设主屏 / 判断状态全部以 UUID 为准，避免按名字匹配在真机上失效。
-- **失败退避 + 冷却**：连接失败按指数退避（4→8→…→封顶 `BACKOFF_MAX`），连续失败 `FAIL_LIMIT` 次进入冷却并只告警一次，不刷日志。
+- **失败退避 + 冷却（不放弃）**：连接失败按指数退避（4→8→…→封顶 `BACKOFF_MAX`），连续失败 `FAIL_LIMIT` 次进入冷却、只告警一次不刷日志；但冷却中**仍按 `BACKOFF_MAX` 间隔持续静默重试，连上即自动恢复**。
+- **供应链安全**：依赖采用**固定版本 + 内置 sha256 强校验**（SidecarLauncher `1.2` / BetterDisplay `v4.3.4`），下载物指纹不匹配即中止；只对**已校验**的 SidecarLauncher 解除隔离，BetterDisplay 交回 Gatekeeper 验证。确需跳过校验用 `ALLOW_UNVERIFIED=1`（不推荐）。
 - **桌面通知**：连上设主屏成功 / 反复失败时弹 macOS 通知（坏屏看不到日志时也能知道结果）。
 - **日志轮转**：`run.log` 超过 `MAX_LOG_BYTES` 自动转存，长期常驻不胀大。
 - **解析更稳**：优先用 `jq` 解析 BetterDisplay 输出，无 `jq` 时回退 `awk`。

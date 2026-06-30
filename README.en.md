@@ -79,7 +79,8 @@ Design highlights:
 - **No UI automation**: uses the SidecarLauncher binary instead of AppleScript clicking Control Center, avoiding the flaky "Accessibility permission" trap under launchd.
 - **Cross-model adaptive**: iPad name, Sidecar-display / internal-display UUIDs are all **auto-detected at runtime** — nothing hard-coded.
 - **Everything keyed by UUID**: in BetterDisplay the Sidecar screen is actually named `Sidecar Display` (not `iPad`), so setting the primary / checking state is all done by UUID, avoiding name-matching that fails on real hardware.
-- **Failure backoff + cooldown**: connection failures back off exponentially (4→8→… capped at `BACKOFF_MAX`); after `FAIL_LIMIT` consecutive failures it enters a cooldown and warns only once, instead of spamming the log.
+- **Failure backoff + cooldown (never gives up)**: connection failures back off exponentially (4→8→… capped at `BACKOFF_MAX`); after `FAIL_LIMIT` consecutive failures it enters a cooldown and warns only once instead of spamming the log — but **keeps retrying silently at the `BACKOFF_MAX` interval and recovers automatically once it connects**.
+- **Supply-chain safety**: dependencies are installed from **pinned versions with built-in mandatory sha256 verification** (SidecarLauncher `1.2` / BetterDisplay `v4.3.4`); a fingerprint mismatch aborts the install. Quarantine is removed **only** for the verified SidecarLauncher; BetterDisplay is left for Gatekeeper to verify. To skip verification (not recommended) use `ALLOW_UNVERIFIED=1`.
 - **Desktop notifications**: pops a macOS notification when it succeeds at setting the primary, or when it keeps failing (so you know the result even when the screen is dead).
 - **Log rotation**: `run.log` is rotated once it exceeds `MAX_LOG_BYTES`, so a long-running daemon doesn't bloat it.
 - **Sturdier parsing**: prefers `jq` to parse BetterDisplay output, falling back to `awk` when `jq` is absent.

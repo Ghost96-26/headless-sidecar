@@ -37,8 +37,14 @@ MAX_LOG_BYTES=1048576
 BACKOFF_MAX=60
 FAIL_LIMIT=5
 
-# 可选：依赖二进制的 sha256 校验值（安装时核对，防止下载被篡改）。
-# 留空则只打印实际哈希、不校验。可先跑一次 install.sh 记录哈希再回填。
+# 依赖完整性校验（供应链安全）：
+# install.sh 已内置固定版本(SidecarLauncher 1.2 / BetterDisplay v4.3.4)及其
+# sha256，并默认强制校验、不匹配即中止——通常无需在这里设置。
+# 仅当你要装其它版本时，作为 install 的环境变量覆盖：
+#   SIDECAR_VERSION=x.y SIDECAR_SHA256=<zip哈希> \
+#   BD_VERSION=vX.Y.Z   BD_SHA256=<dmg哈希>   ./install.sh
+# 调试时如确需跳过校验（有风险）：ALLOW_UNVERIFIED=1 ./install.sh
+# （注意：以下两项由 install.sh 读取环境变量，写在 config.sh 不生效。）
 SIDECAR_SHA256=""
 BD_SHA256=""
 

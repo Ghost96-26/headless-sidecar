@@ -47,31 +47,35 @@ while true; do
       fi
     else
       arranged=0
-      if [ "$fails" -ge "$FAIL_LIMIT" ]; then
-        # 进入冷却：拉长到退避上限，只告警一次，避免刷屏
+      in_cooldown=0; [ "$fails" -ge "$FAIL_LIMIT" ] && in_cooldown=1
+      if [ "$in_cooldown" -eq 1 ]; then
+        # 冷却：只告警一次，避免刷屏；但仍按 BACKOFF_MAX 间隔持续静默重试，连上即恢复
         if [ "$cooldown_warned" -eq 0 ]; then
-          log "[daemon] 连接连续失败 ${fails} 次，进入冷却（每 ${BACKOFF_MAX}s 重试一次）。请检查 iPad 解锁/同一 Apple ID/蓝牙 WiFi"
+          log "[daemon] 连接连续失败 ${fails} 次，进入冷却：之后每 ${BACKOFF_MAX}s 仍会静默重试，连上即自动恢复。请检查 iPad 解锁/同一 Apple ID/蓝牙 WiFi"
           notify "Sidecar 连接反复失败，请检查 iPad 与网络"
           cooldown_warned=1
         fi
-        backoff="$BACKOFF_MAX"
       else
-        log "[daemon] 检测到 iPad 已插入但未连，发起 Sidecar..."
-        if connect_sidecar; then
-          sleep 4
-          if sidecar_active; then
-            fails=0; backoff=0
-          else
-            fails=$((fails+1))
-          fi
+        log "[daemon] 检测到 iPad 已插入但未连，发起 Sidecar...（已失败 ${fails} 次）"
+      fi
+      # 无论是否冷却都真正尝试连接（修复：冷却不再放弃）
+      if connect_sidecar; then
+        sleep 4
+        if sidecar_active; then
+          [ "$in_cooldown" -eq 1 ] && { log "[daemon] 冷却中重试成功，已恢复连接"; notify "Sidecar 已恢复连接 ✅"; }
+          fails=0; cooldown_warned=0
         else
           fails=$((fails+1))
         fi
-        # 指数退避：4,8,16,... 封顶 BACKOFF_MAX
-        if [ "$fails" -gt 0 ]; then
-          backoff=$(( (1 << (fails<5?fails:5)) * 2 ))
-          [ "$backoff" -gt "$BACKOFF_MAX" ] && backoff="$BACKOFF_MAX"
-        fi
+      else
+        fails=$((fails+1))
+      fi
+      # 退避：冷却固定为上限，否则指数退避 4,8,16,... 封顶 BACKOFF_MAX
+      if [ "$fails" -ge "$FAIL_LIMIT" ]; then
+        backoff="$BACKOFF_MAX"
+      else
+        backoff=$(( (1 << (fails<5?fails:5)) * 2 ))
+        [ "$backoff" -gt "$BACKOFF_MAX" ] && backoff="$BACKOFF_MAX"
       fi
     fi
   else

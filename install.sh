@@ -9,16 +9,35 @@ say(){ printf "${GREEN}==>${NC} %s\n" "$1"; }
 warn(){ printf "${YEL}[!]${NC} %s\n" "$1"; }
 die(){ printf "${RED}[x]${NC} %s\n" "$1"; exit 1; }
 
-# 计算并（可选）校验 sha256：verify_sha <file> <expected|空>
+# 强制校验 sha256（供应链安全：默认 fail-closed）。
+# verify_sha <file> <expected> <label>
+# - 期望值非空且匹配 → 通过；不匹配 → 中止。
+# - 期望值为空 → 中止，除非显式 ALLOW_UNVERIFIED=1（仅供调试，不推荐）。
 verify_sha(){
-  local f="$1" want="$2" got
+  local f="$1" want="$2" label="$3" got
   got="$(shasum -a 256 "$f" 2>/dev/null | awk '{print $1}')"
-  say "sha256($(basename "$f")) = $got"
-  if [ -n "$want" ]; then
-    [ "$got" = "$want" ] || die "校验失败：期望 $want，实际 $got（疑似下载被篡改/损坏，已中止）"
-    say "sha256 校验通过"
+  if [ -z "$want" ]; then
+    if [ "${ALLOW_UNVERIFIED:-0}" = "1" ]; then
+      warn "$label 跳过校验（ALLOW_UNVERIFIED=1，有被篡改风险）。实际 sha256=$got"
+      return 0
+    fi
+    die "$label 缺少校验和，已中止。请更新本仓库固定的版本与 sha256；如确需跳过，显式设 ALLOW_UNVERIFIED=1（不推荐）。实际 sha256=$got"
+  fi
+  if [ "$got" = "$want" ]; then
+    say "$label sha256 校验通过 ($got)"
+  else
+    die "$label 校验失败：期望 $want，实际 $got。疑似下载被篡改/损坏，已中止。"
   fi
 }
+
+# ---- 固定依赖版本与校验和（供应链安全锚点）----
+# 默认对下载物做强校验。升级依赖时：改版本号，并用
+#   curl -fsSL <url> | shasum -a 256
+# 重新计算填到这里（或安装时用 SIDECAR_SHA256 / BD_SHA256 覆盖）。
+SIDECAR_VERSION="${SIDECAR_VERSION:-1.2}"
+SIDECAR_ZIP_SHA256="${SIDECAR_SHA256:-fc3df81639f400aaff9b44ba20650cf56ef2f73a033b927bbe378cb3c73b9764}"
+BD_VERSION="${BD_VERSION:-v4.3.4}"
+BD_DMG_SHA256="${BD_SHA256:-234122f7e4ec6e6b00ea2143d42c12720ad4ece3bd98bddf977feebc2612e092}"
 
 echo "==================================================="
 echo " Headless Sidecar 安装程序"
@@ -35,17 +54,17 @@ SL="$HSROOT/bin/SidecarLauncher"
 if [ -x "$SL" ] && "$SL" devices >/dev/null 2>&1; then
   say "SidecarLauncher 已就绪"
 else
-  say "下载 SidecarLauncher..."
-  URL="$(curl -fsSL https://api.github.com/repos/Ocasio-J/SidecarLauncher/releases/latest \
-        | grep browser_download_url | grep -i '.zip' | head -1 | cut -d'"' -f4)"
-  [ -n "$URL" ] || die "无法获取 SidecarLauncher 下载地址（检查网络）"
+  say "下载 SidecarLauncher（固定版本 $SIDECAR_VERSION）..."
+  URL="https://github.com/Ocasio-J/SidecarLauncher/releases/download/${SIDECAR_VERSION}/SidecarLauncher.zip"
   TMP="$(mktemp -d)"
-  curl -fsSL -o "$TMP/sl.zip" "$URL"
+  curl -fsSL -o "$TMP/sl.zip" "$URL" || die "下载 SidecarLauncher 失败（检查网络或固定版本是否仍存在）"
+  # 先校验下载物（供应链锚点），通过后再解压
+  verify_sha "$TMP/sl.zip" "$SIDECAR_ZIP_SHA256" "SidecarLauncher.zip"
   unzip -oq "$TMP/sl.zip" -d "$TMP/extract"
   BIN="$(find "$TMP/extract" -type f -name 'SidecarLauncher' | head -1)"
   [ -n "$BIN" ] || die "解压后未找到 SidecarLauncher 可执行文件"
-  verify_sha "$BIN" "${SIDECAR_SHA256:-}"
   cp "$BIN" "$SL"; chmod +x "$SL"
+  # 仅对“已通过 sha256 校验”的 SidecarLauncher 解除隔离（未签名 CLI，需此步才能 headless 运行）
   xattr -dr com.apple.quarantine "$SL" 2>/dev/null || true
   rm -rf "$TMP"
   if "$SL" devices >/dev/null 2>&1; then say "SidecarLauncher 安装成功"
@@ -62,19 +81,18 @@ else
     brew install --cask betterdisplay || warn "brew 安装失败，改用直接下载"
   fi
   if [ ! -d "$BDAPP" ]; then
-    say "下载 BetterDisplay dmg..."
-    URL="$(curl -fsSL https://api.github.com/repos/waydabber/BetterDisplay/releases/latest \
-          | grep browser_download_url | grep -i '.dmg' | head -1 | cut -d'"' -f4)"
-    [ -n "$URL" ] || die "无法获取 BetterDisplay 下载地址"
-    TMP="$(mktemp -d)"; curl -fsSL -o "$TMP/bd.dmg" "$URL"
-    verify_sha "$TMP/bd.dmg" "${BD_SHA256:-}"
+    say "下载 BetterDisplay dmg（固定版本 $BD_VERSION）..."
+    URL="https://github.com/waydabber/BetterDisplay/releases/download/${BD_VERSION}/BetterDisplay-${BD_VERSION}.dmg"
+    TMP="$(mktemp -d)"
+    curl -fsSL -o "$TMP/bd.dmg" "$URL" || die "下载 BetterDisplay 失败（检查网络或固定版本是否仍存在）"
+    verify_sha "$TMP/bd.dmg" "$BD_DMG_SHA256" "BetterDisplay.dmg"
     VOL="$(hdiutil attach "$TMP/bd.dmg" -nobrowse -quiet | grep -o '/Volumes/.*' | head -1)"
     cp -R "$VOL/BetterDisplay.app" /Applications/ 2>/dev/null \
       || { warn "复制到 /Applications 需要权限，尝试 sudo"; sudo cp -R "$VOL/BetterDisplay.app" /Applications/; }
     hdiutil detach "$VOL" -quiet || true
-    xattr -dr com.apple.quarantine "$BDAPP" 2>/dev/null || true
+    # 注意：不抹 BetterDisplay 的 quarantine —— 它已签名/公证，交给 Gatekeeper 验证。
     rm -rf "$TMP"
-    say "BetterDisplay 安装成功"
+    say "BetterDisplay 安装成功（首次打开如有 Gatekeeper 提示，请在“系统设置 → 隐私与安全性”放行）"
   fi
 fi
 say "首次启动 BetterDisplay（请按屏幕提示授予权限，并在其设置中开启 Launch at login）..."
